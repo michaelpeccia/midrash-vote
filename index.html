@@ -442,7 +442,7 @@ function panelSuggest() {
   const card = h("section", { class: "card" },
     h("h2", { text: "What should we study?" }),
     h("p", { class: "lead", text: "Drop a topic, a question, or a passage you want us to dig into together. Voting opens Wednesday at 6 PM CT." }));
-  if (mineCount >= max) {
+  if (mineCount >= max && !admin()) {
     card.append(h("div", { class: "notice", text: `You've added ${max} topics this round. Thank you! 🙌 Come back Wednesday at 6 PM CT to vote.` }));
   } else {
     const ta = h("textarea", { maxlength: "140", placeholder: "Example: How do I forgive family who hurt me?", "aria-label": "Your topic" });
@@ -458,7 +458,7 @@ function panelSuggest() {
       btn.disabled = true;
       try { await S.be.addSuggestion(S.cycle.id, text, name); ta.value = ""; cnt.textContent = "0 / 140"; toast("Topic added! 🙌"); burst(40); }
       catch (err) { console.error(err); toast("That did not go through. Try again."); btn.disabled = false; }
-    } }, ta, h("div", { class: "meta" }, h("span", { text: `${max - mineCount} left this round` }), cnt), nm, btn);
+    } }, ta, h("div", { class: "meta" }, h("span", { text: admin() ? "Admin: no limit" : `${max - mineCount} left this round` }), cnt), nm, btn);
     card.append(form);
   }
   card.append(h("h3", { text: `Topics so far (${list.filter(s => !s.hidden).length})` }));
