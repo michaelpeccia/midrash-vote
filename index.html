@@ -6,7 +6,7 @@
 <title>Midrash Topic Vote | Kingdom Life Ministry</title>
 <meta name="description" content="Suggest a topic and vote on what we open the Word on next at the Kingdom Life Midrash.">
 <meta property="og:title" content="You pick the next Midrash topic">
-<meta property="og:description" content="Suggest a topic, then vote Wednesday 6 PM to Thursday 6 PM CT. Live Saturday 6:30 PM CT. Kingdom Life Ministry.">
+<meta property="og:description" content="Suggest a topic, then vote Tuesday 6 PM to Thursday 6 PM CT. Live Saturday 6:30 PM CT. Kingdom Life Ministry.">
 <meta name="theme-color" content="#0b0820">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -186,6 +186,11 @@ const CONFIG = {
   everyWeeks: 1,                          // 1 = topic Midrash every week, 2 = every other week
   liveStart: [18, 30],                    // Saturday 6:30 PM CT
   liveEnd: [20, 30],                      // when the "We're live" screen switches to the next round
+  voteOpensDaysBefore: 4,                 // 4 = voting opens Tuesday 6 PM CT
+  voteClosesDaysBefore: 2,                // 2 = voting closes Thursday 6 PM CT
+  // Postponed Midrashes: "original Saturday": "new Saturday". The original round's
+  // votes carry over and stay on the results screen until the new date.
+  postponed: { "2026-11-21": "2026-11-28" },
   maxSuggestionsPerPerson: 2,
   links: {
     youtube: "https://www.youtube.com/@MichaelBenYahKingdomLife777",
@@ -251,11 +256,17 @@ function computeCycle(now) {
   let S = A + Math.floor((todayCT(now) - A) / C) * C;
   while (liveEndOf(S) <= now) S += C;
   while (liveEndOf(S - C) > now) S -= C;
+  let O = S, moved = false; // O = the round (whose votes we use), S = the day we go live
+  for (const [from, to] of Object.entries(CONFIG.postponed || {})) {
+    const F = dayFromISO(from), T = dayFromISO(to);
+    if (now >= liveEndOf(F - C) && now < liveEndOf(T)) { O = F; S = T; moved = true; }
+  }
   const c = {
-    id: isoFromDay(S), sat: S,
-    suggestStart: liveEndOf(S - C),
-    voteStart: ctToMs(S - 3, 18, 0),
-    voteEnd: ctToMs(S - 2, 18, 0),
+    id: isoFromDay(O), sat: S, moved, origSat: O,
+    voteDay: O - CONFIG.voteOpensDaysBefore, closeDay: O - CONFIG.voteClosesDaysBefore,
+    suggestStart: liveEndOf(O - C),
+    voteStart: ctToMs(O - CONFIG.voteOpensDaysBefore, 18, 0),
+    voteEnd: ctToMs(O - CONFIG.voteClosesDaysBefore, 18, 0),
     liveStart: ctToMs(S, ...CONFIG.liveStart),
     liveEnd: liveEndOf(S)
   };
@@ -380,8 +391,8 @@ function renderClock(now) {
   if (S.settings.paused) { card.style.display = "none"; return; }
   card.style.display = "";
   let target, label, sub;
-  if (ph === "suggest") { target = c.voteStart; label = "Voting opens in"; sub = `${dayLabel(c.sat - 3)} · 6:00 PM CT`; }
-  else if (ph === "vote") { target = c.voteEnd; label = "Voting closes in"; sub = `${dayLabel(c.sat - 2)} · 6:00 PM CT`; }
+  if (ph === "suggest") { target = c.voteStart; label = "Voting opens in"; sub = `${dayLabel(c.voteDay)} · 6:00 PM CT`; }
+  else if (ph === "vote") { target = c.voteEnd; label = "Voting closes in"; sub = `${dayLabel(c.closeDay)} · 6:00 PM CT`; }
   else if (ph === "results") { target = c.liveStart; label = "Midrash goes live in"; sub = `${dayLabel(c.sat)} · 6:30 PM CT`; }
   else { card.style.display = "none"; return; }
   if (S.override) target = now + ({ suggest: 2 * 86400000 + 5e6, vote: 7.2e7, results: 1.6e8 }[ph] || 0) - (now % 1000);
@@ -412,8 +423,8 @@ function renderPill() {
   const idx = ph === "live" ? 3 : order.indexOf(ph);
   const c = S.cycle;
   const steps = [
-    ["Suggest", `Until Wed 6 PM`],
-    ["Vote", "Wed 6 PM to Thu 6 PM"],
+    ["Suggest", `Until Tue 6 PM`],
+    ["Vote", "Tue 6 PM to Thu 6 PM"],
     ["Midrash", `Sat ${dayLabel(c.sat).split(", ")[1]} · 6:30 PM`]
   ];
   $("#steps").style.display = S.settings.paused ? "none" : "";
@@ -441,9 +452,9 @@ function panelSuggest() {
   const max = CONFIG.maxSuggestionsPerPerson;
   const card = h("section", { class: "card" },
     h("h2", { text: "What should we study?" }),
-    h("p", { class: "lead", text: "Drop a topic, a question, or a passage you want us to dig into together. Voting opens Wednesday at 6 PM CT." }));
+    h("p", { class: "lead", text: "Drop a topic, a question, or a passage you want us to dig into together. Voting opens Tuesday at 6 PM CT." }));
   if (mineCount >= max && !admin()) {
-    card.append(h("div", { class: "notice", text: `You've added ${max} topics this round. Thank you! 🙌 Come back Wednesday at 6 PM CT to vote.` }));
+    card.append(h("div", { class: "notice", text: `You've added ${max} topics this round. Thank you! 🙌 Come back Tuesday at 6 PM CT to vote.` }));
   } else {
     const ta = h("textarea", { maxlength: "140", placeholder: "Example: How do I forgive family who hurt me?", "aria-label": "Your topic" });
     const nm = h("input", { type: "text", maxlength: "40", placeholder: "Your name (optional)", "aria-label": "Your name" });
@@ -520,6 +531,7 @@ function panelResults() {
     card.append(h("h2", { text: "No votes this round" }), h("p", { class: "lead", text: "Join us Saturday at 6:30 PM CT and bring your questions." }), joinLinks());
     return card;
   }
+  if (S.cycle.moved) card.append(h("div", { class: "notice", style: "margin-bottom:14px", text: `📅 This Midrash was moved to ${dayLabel(S.cycle.sat)} at 6:30 PM CT. These topics carry over!` }));
   card.append(h("div", { class: "winner" },
     h("div", { class: "crown", text: "👑" }),
     h("div", { class: "lbl", text: w.length > 1 ? "It's a tie!" : "This Saturday's topic" }),
